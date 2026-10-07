@@ -1,0 +1,142 @@
+# ============================================================
+# AWG FAR-FIELD ANALYSIS
+# ============================================================
+
+# Extract the field as a function of angle
+f = getdata("Field Profile","f");
+E = sqrt(farfield2d("Field Profile",1:length(f),101));
+theta = farfieldangle("Field Profile",1,101)*pi/180;
+
+############################################################
+# Parameters supplied from Python
+#
+# neff_slab
+# x_ff
+# y_ff
+# fpoint
+############################################################
+
+# Get the near field using farfield exact
+x = x_ff;
+y = y_ff;
+
+fpoint = fpoint_lsf;
+
+lambda = c/f(fpoint);
+
+distance = sqrt(y^2+x^2);
+theta0 = atan2(y,x);
+
+E_sim = farfieldexact2d(
+    "Field Profile",
+    x,
+    y,
+    fpoint
+);
+
+# Reproduce the magnitude of the field times the phase,
+# using the phase of Ey for simplicity
+E_sim = pinch(
+    sqrt(sum(abs(E_sim)^2,3))
+    * exp(1i*angle(pinch(E_sim,3,2)))
+);
+
+############################################################
+# Rapid projection
+############################################################
+
+Etest = interp(
+    E,
+    theta,
+    f,
+    theta0,
+    c/lambda
+)
+/
+sqrt(distance)
+*
+exp(
+    1i*2*pi/lambda*neff_slab*distance
+);
+
+############################################################
+# Phase normalization
+############################################################
+
+theta1 = unwrap(angle(E_sim));
+theta2 = unwrap(angle(Etest));
+
+pos = find(y,0);
+
+theta1 =
+    theta1
+    - round(theta1(pos)/(2*pi))*2*pi;
+
+theta2 =
+    theta2
+    - round(theta2(pos)/(2*pi))*2*pi;
+
+############################################################
+# Central frequency point
+############################################################
+
+E_center = pinch(E,2,fpoint);
+
+normfac = integrate(
+    abs(E_center)^2,
+    1,
+    theta
+);
+
+E_normalized = E_center/sqrt(normfac);
+
+############################################################
+# Create INTERCONNECT strings
+############################################################
+
+outstring1 =
+    "E = transpose(["
+    + replacestring(
+        num2str(transpose(E_normalized)),
+        "	",
+        ", "
+    )
+    + "]);";
+
+outstring2 =
+    "thetaE = transpose(["
+    + replacestring(
+        num2str(transpose(theta)),
+        "	",
+        ", "
+    )
+    + "]);";
+
+############################################################
+# Print
+############################################################
+
+?"String for interconnect model is: ";
+?outstring1 + endl + outstring2;
+
+
+# plot comparisons
+plot(y*1e6,abs(E_sim),abs(Etest),"y (microns)","|E|");
+legend("simulated, using farfieldexact","from rapid projection of E(theta)");
+theta1 = unwrap(angle(E_sim));
+theta2 = unwrap(angle(Etest));
+pos = find(y,0);
+theta1 = theta1 - round(theta1(pos)/(2*pi))*2*pi;
+theta2 = theta2 - round(theta2(pos)/(2*pi))*2*pi;
+plot(y*1e6,theta1,theta2,"y (microns)","angle(E) (radians)");
+legend("simulated, using farfieldexact","from rapid projection of E(theta)");
+
+
+
+# look at variation with frequency
+plot(theta*180/pi,E,"theta (degrees)","|E|");
+leg = cell(length(f));
+for(i=1:length(f)) {
+    leg{i} = num2str( round(c/f(i)*1e9) ) + " nm";
+}
+legend(leg);
